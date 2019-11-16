@@ -22,7 +22,8 @@
           size="mini"
           type="primary"
           icon="el-icon-upload"
-          @click="add">文件上传</el-button>
+          @click="add">文件上传
+        </el-button>
       </div>
       <!-- 多选删除 -->
       <div style="display: inline-block;margin: 0px 2px;">
@@ -34,7 +35,8 @@
           size="mini"
           type="danger"
           icon="el-icon-delete"
-          @click="open">删除</el-button>
+          @click="open">删除
+        </el-button>
       </div>
       <!-- 导出 -->
       <div style="display: inline-block;">
@@ -52,9 +54,37 @@
     <!--表格渲染-->
     <el-table v-loading="loading" ref="table" :data="data" size="small" style="width: 100%;">
       <el-table-column type="selection" width="55"/>
-      <el-table-column :show-overflow-tooltip="true" prop="name" label="文件名">
+      <el-table-column prop="name" width="150px" label="文件名">
         <template slot-scope="scope">
-          <el-link :underline="false" :href="baseApi + '/file/' + scope.row.type + '/' + scope.row.realName" target="_blank" type="primary">{{ scope.row.name }}</el-link>
+          <el-popover
+            :content="'file/' + scope.row.type + '/' + scope.row.realName"
+            placement="top-start"
+            title="路径"
+            width="200"
+            trigger="hover">
+            <a
+              slot="reference"
+              :href="baseApi + '/file/' + scope.row.type + '/' + scope.row.realName"
+              class="el-link--primary"
+              style="word-break:keep-all;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color: #1890ff;font-size: 13px;"
+              target="_blank">
+              {{ scope.row.name }}
+            </a>
+          </el-popover>
+        </template>
+      </el-table-column>
+      <el-table-column prop="path" label="预览图">
+        <template slot-scope="{row}">
+          <el-image
+            :src=" baseApi + '/file/' + row.type + '/' + row.realName"
+            :preview-src-list="[baseApi + '/file/' + row.type + '/' + row.realName]"
+            fit="contain"
+            lazy
+            class="el-avatar">
+            <div slot="error">
+              <i class="el-icon-document"/>
+            </div>
+          </el-image>
         </template>
       </el-table-column>
       <el-table-column prop="suffix" label="文件类型"/>
@@ -64,11 +94,6 @@
       <el-table-column prop="createTime" label="创建日期">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.createTime) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="updateTime" label="修改日期">
-        <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.updateTime) }}</span>
         </template>
       </el-table-column>
       <el-table-column v-if="checkPermission(['admin','storage:edit','storage:del'])" label="操作" width="150px" align="center">
@@ -82,7 +107,8 @@
             <p>确定删除本条数据吗？</p>
             <div style="text-align: right; margin: 0">
               <el-button size="mini" type="text" @click="$refs[scope.row.id].doClose()">取消</el-button>
-              <el-button :loading="delLoading" type="primary" size="mini" @click="subDelete(scope.row.id)">确定</el-button>
+              <el-button :loading="delLoading" type="primary" size="mini" @click="subDelete(scope.row.id)">确定
+              </el-button>
             </div>
             <el-button slot="reference" type="danger" icon="el-icon-delete" size="mini"/>
           </el-popover>
@@ -223,5 +249,10 @@ export default {
 </script>
 
 <style scoped>
-
+  /deep/ .el-image__error, .el-image__placeholder{
+    background: none;
+  }
+  /deep/ .el-image-viewer__wrapper{
+    top: 55px;
+  }
 </style>
