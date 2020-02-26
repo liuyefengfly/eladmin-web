@@ -12,9 +12,7 @@ import Vue from 'vue'
  */
 function CRUD(options) {
   const defaultOptions = {
-    tag: 'default',
-    // id字段名
-    idField: 'id',
+    tag: '',
     // 标题
     title: '',
     // 请求数据的url
@@ -38,7 +36,7 @@ function CRUD(options) {
     // CRUD Method
     crudMethod: {
       add: (form) => {},
-      del: (id) => {},
+      delete: (id) => {},
       edit: (form) => {},
       get: (id) => {}
     },
@@ -167,7 +165,7 @@ function CRUD(options) {
         return
       }
       crud.status.edit = CRUD.STATUS.PREPARED
-      crud.getDataStatus(crud.getDataId(data)).edit = CRUD.STATUS.PREPARED
+      crud.getDataStatus(data.id).edit = CRUD.STATUS.PREPARED
       callVmHook(crud, CRUD.HOOK.afterToEdit, crud.form)
       callVmHook(crud, CRUD.HOOK.afterToCU, crud.form)
     },
@@ -176,7 +174,7 @@ function CRUD(options) {
      * @param {*} data 数据项
      */
     toDelete(data) {
-      crud.getDataStatus(crud.getDataId(data)).delete = CRUD.STATUS.PREPARED
+      crud.getDataStatus(data.id).delete = CRUD.STATUS.PREPARED
     },
     /**
      * 取消删除
@@ -186,7 +184,7 @@ function CRUD(options) {
       if (!callVmHook(crud, CRUD.HOOK.beforeDeleteCancel, data)) {
         return
       }
-      crud.getDataStatus(crud.getDataId(data)).delete = CRUD.STATUS.NORMAL
+      crud.getDataStatus(data.id).delete = CRUD.STATUS.NORMAL
       callVmHook(crud, CRUD.HOOK.afterDeleteCancel, data)
     },
     /**
@@ -206,7 +204,7 @@ function CRUD(options) {
           return
         }
         crud.status.edit = CRUD.STATUS.NORMAL
-        crud.getDataStatus(crud.getDataId(crud.form)).edit = CRUD.STATUS.NORMAL
+        crud.getDataStatus(crud.form.id).edit = CRUD.STATUS.NORMAL
       }
       crud.resetForm()
       if (addStatus === CRUD.STATUS.PREPARED) {
@@ -270,7 +268,7 @@ function CRUD(options) {
       crud.status.edit = CRUD.STATUS.PROCESSING
       crud.crudMethod.edit(crud.form).then(() => {
         crud.status.edit = CRUD.STATUS.NORMAL
-        crud.getDataStatus(crud.getDataId(crud.form)).edit = CRUD.STATUS.NORMAL
+        crud.getDataStatus(crud.form.id).edit = CRUD.STATUS.NORMAL
         crud.editSuccessNotify()
         crud.resetForm()
         callVmHook(crud, CRUD.HOOK.afterSubmit)
@@ -291,11 +289,11 @@ function CRUD(options) {
       if (data instanceof Array) {
         delAll = true
         data.forEach(val => {
-          ids.push(this.getDataId(val))
+          ids.push(val.id)
         })
       } else {
-        ids.push(this.getDataId(data))
-        dataStatus = crud.getDataStatus(this.getDataId(data))
+        ids.push(data.id)
+        dataStatus = crud.getDataStatus(data.id)
       }
       if (!callVmHook(crud, CRUD.HOOK.beforeDelete, data)) {
         return
@@ -405,7 +403,7 @@ function CRUD(options) {
       const dataStatus = {}
       function resetStatus(datas) {
         datas.forEach(e => {
-          dataStatus[crud.getDataId(e)] = {
+          dataStatus[e.id] = {
             delete: 0,
             edit: 0
           }
@@ -445,7 +443,7 @@ function CRUD(options) {
      */
     selectChange(selection, row) {
       // 如果selection中存在row代表是选中，否则是取消选中
-      if (selection.find(val => { return this.getDataId(val) === this.getDataId(row) })) {
+      if (selection.find(val => { return val.id === row.id })) {
         if (row.children) {
           row.children.forEach(val => {
             crud.findVM('presenter').$refs['table'].toggleRowSelection(val, true)
@@ -486,12 +484,6 @@ function CRUD(options) {
     },
     updateProp(name, value) {
       Vue.set(crud.props, name, value)
-    },
-    getDataId(data) {
-      if (!data.hasOwnProperty(this.idField)) {
-        console.error('[CRUD error]: no property [%s] in %o', this.idField, data)
-      }
-      return data[this.idField]
     }
   }
   const crud = Object.assign({}, data)
@@ -572,45 +564,46 @@ function mergeOptions(src, opts) {
   return optsRet
 }
 
+function getCrudPiName(crudTag) {
+  return 'crud' + (crudTag ? '$' + crudTag : '')
+}
+
 /**
- * 查找crud
+ * 根据tag修正注入crud时from值
  * @param {*} vm
- * @param {string} tag
  */
-function lookupCrud(vm, tag) {
-  tag = tag || vm.$attrs['crud-tag'] || 'default'
-  // function lookupCrud(vm, tag) {
-  if (vm.$crud) {
-    const ret = vm.$crud[tag]
-    if (ret) {
-      return ret
+function reviseInject(vm) {
+  if (vm.$attrs['crud-tag']) {
+    const inject = vm.$options.inject
+    for (const k in inject) {
+      const v = inject[k]
+      const from = v.from
+      if (from === 'crud' || from.startsWith('crud.')) {
+        v.from = from.replace('crud', getCrudPiName(vm.$attrs['crud-tag']))
+      }
     }
   }
-  return vm.$parent ? lookupCrud(vm.$parent, tag) : undefined
 }
 
 /**
  * crud主页
  */
 function presenter(crud) {
-  if (crud) {
-    console.warn('[CRUD warn]: ' + 'please use $options.cruds() { return CRUD(...) or [CRUD(...), ...] }')
-  }
+  const crudPiName = getCrudPiName(crud.tag)
   return {
-    beforeCreate() {
-      this.$crud = this.$crud || {}
-      let cruds = this.$options.cruds instanceof Function ? this.$options.cruds() : crud
-      if (!(cruds instanceof Array)) {
-        cruds = [cruds]
+    inject: {
+      crud: {
+        from: crudPiName
       }
-      cruds.forEach(ele => {
-        if (this.$crud[ele.tag]) {
-          console.error('[CRUD error]: ' + 'crud with tag [' + ele.tag + ' is already exist')
-        }
-        this.$crud[ele.tag] = ele
-        ele.registerVM('presenter', this, 0)
+    },
+    beforeCreate() {
+      // 由于initInjections在initProvide之前执行，如果该组件自己就需要crud，需要在initInjections前准备好crud
+      this._provided = Object.assign(this._provided || {}, {
+        [crudPiName]: crud,
+        [crudPiName + '.query']: crud.query,
+        [crudPiName + '.page']: crud.page,
+        [crudPiName + '.form']: crud.form
       })
-      this.crud = this.$crud['defalut'] || cruds.length > 0 ? cruds[0] : null
     },
     data() {
       return {
@@ -621,16 +614,13 @@ function presenter(crud) {
       parseTime
     },
     created() {
-      for (const k in this.$crud) {
-        if (this.$crud[k].queryOnPresenterCreated) {
-          this.$crud[k].toQuery()
-        }
+      this.crud.registerVM('presenter', this, 0)
+      if (crud.queryOnPresenterCreated) {
+        crud.toQuery()
       }
     },
-    destroyed() {
-      for (const k in this.$crud) {
-        this.$crud[k].unregisterVM(this)
-      }
+    beforeDestroy() {
+      this.crud.unregisterVM(this)
     },
     mounted() {
       const columns = []
@@ -657,12 +647,21 @@ function presenter(crud) {
  */
 function header() {
   return {
+    inject: {
+      crud: {
+        from: 'crud'
+      },
+      query: {
+        from: 'crud.query'
+      }
+    },
     beforeCreate() {
-      this.crud = lookupCrud(this)
-      this.query = this.crud.query
+      reviseInject(this)
+    },
+    created() {
       this.crud.registerVM('header', this, 1)
     },
-    destroyed() {
+    beforeDestroy() {
       this.crud.unregisterVM(this)
     }
   }
@@ -673,12 +672,21 @@ function header() {
  */
 function pagination() {
   return {
+    inject: {
+      crud: {
+        from: 'crud'
+      },
+      page: {
+        from: 'crud.page'
+      }
+    },
     beforeCreate() {
-      this.crud = lookupCrud(this)
-      this.page = this.crud.page
+      reviseInject(this)
+    },
+    created() {
       this.crud.registerVM('pagination', this, 2)
     },
-    destroyed() {
+    beforeDestroy() {
       this.crud.unregisterVM(this)
     }
   }
@@ -689,16 +697,23 @@ function pagination() {
  */
 function form(defaultForm) {
   return {
+    inject: {
+      crud: {
+        from: 'crud'
+      },
+      form: {
+        from: 'crud.form'
+      }
+    },
     beforeCreate() {
-      this.crud = lookupCrud(this)
-      this.form = this.crud.form
-      this.crud.registerVM('form', this, 3)
+      reviseInject(this)
     },
     created() {
+      this.crud.registerVM('form', this, 3)
       this.crud.defaultForm = defaultForm
       this.crud.resetForm()
     },
-    destroyed() {
+    beforeDestroy() {
       this.crud.unregisterVM(this)
     }
   }
@@ -713,11 +728,18 @@ function crud(options = {}) {
   }
   options = mergeOptions(defaultOptions, options)
   return {
+    inject: {
+      crud: {
+        from: 'crud'
+      }
+    },
     beforeCreate() {
-      this.crud = lookupCrud(this)
+      reviseInject(this)
+    },
+    created() {
       this.crud.registerVM(options.type, this)
     },
-    destroyed() {
+    beforeDestroy() {
       this.crud.unregisterVM(this)
     }
   }
