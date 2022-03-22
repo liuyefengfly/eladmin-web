@@ -12,6 +12,9 @@ eladmin 前端源码
 #### 开发文档
 [https://el-admin.vip](https://el-admin.vip)
 
+#### 体验地址
+[https://el-admin.vip/demo](https://el-admin.vip/demo)
+
 #### 前端模板
 
 初始模板基于： [https://github.com/PanJiaChen/vue-admin-template](https://github.com/PanJiaChen/vue-admin-template)
